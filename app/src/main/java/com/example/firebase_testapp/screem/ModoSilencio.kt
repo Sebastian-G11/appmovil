@@ -14,39 +14,46 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.firebase.database.FirebaseDatabase
 import java.util.*
 
 @Composable
 fun ModoSilencio() {
-    val db = FirebaseDatabase.getInstance().getReference("modo_silencio")
-    val ctx = LocalContext.current
+    val context = LocalContext.current
 
+    // se lee el objeto completo desde Firebase
+    val (datos) = LeerFirebase("modo_silencio", Map::class.java)
+
+    // Estados locales sincronizados
     var modoNoche by remember { mutableStateOf(false) }
     var alertasCriticas by remember { mutableStateOf(false) }
     var desde by remember { mutableStateOf("23:00") }
     var hasta by remember { mutableStateOf("07:00") }
 
-    // Cargar desde Firebase
-    LaunchedEffect(Unit) {
-        db.get().addOnSuccessListener {
-            modoNoche = it.child("activo").getValue(Boolean::class.java) ?: false
-            alertasCriticas = it.child("alertas_criticas").getValue(Boolean::class.java) ?: false
-            desde = it.child("desde").getValue(String::class.java) ?: "23:00"
-            hasta = it.child("hasta").getValue(String::class.java) ?: "07:00"
+    // Actualizar estados cuando cambien los datos en Firebase
+    LaunchedEffect(datos) {
+        if (datos != null) {
+            modoNoche = (datos["activo"] as? Boolean) ?: false
+            alertasCriticas = (datos["alertas_criticas"] as? Boolean) ?: false
+            desde = (datos["desde"] as? String) ?: "23:00"
+            hasta = (datos["hasta"] as? String) ?: "07:00"
         }
     }
 
-    fun actualizar() = db.setValue(
-        mapOf("activo" to modoNoche, "alertas_criticas" to alertasCriticas, "desde" to desde, "hasta" to hasta)
-    )
+    fun actualizarFirebase() {
+        escribirFirebase("modo_silencio", mapOf(
+            "activo" to modoNoche,
+            "alertas_criticas" to alertasCriticas,
+            "desde" to desde,
+            "hasta" to hasta
+        ))
+    }
 
     fun seleccionarHora(inicio: Boolean) {
         val c = Calendar.getInstance()
-        TimePickerDialog(ctx, { _, h, m ->
+        TimePickerDialog(context, { _, h, m ->
             val hora = "%02d:%02d".format(h, m)
             if (inicio) desde = hora else hasta = hora
-            actualizar()
+            actualizarFirebase()
         }, c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE), true).show()
     }
 
@@ -57,40 +64,46 @@ fun ModoSilencio() {
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Text("Modo Silencio",
-            color = Color.White,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold)
+        Text("Modo Silencio", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
 
         Text("Reduce las interrupciones durante la noche.",
-            color = Color(0xFF8FA0AB),
-            fontSize = 14.sp)
+            color = Color(0xFF8FA0AB), fontSize = 14.sp)
 
-        // Activar modo noche
-        ItemSwitch("Activar Modo Noche",
-            null, modoNoche)
-        { modoNoche = it; actualizar() }
+        //activar modo noche
+        ItemSwitch(
+            "Activar Modo Noche",
+            null,
+            modoNoche
+        ) { modoNoche = it; actualizarFirebase() }
 
-        Text("Horario Programado",
+        //Horario programado
+        Text(
+            "Horario Programado",
             color = Color(0xFFB0B8C1),
             fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold)
+            fontWeight = FontWeight.SemiBold
+        )
 
-        ItemHora("Desde", "Define la hora de inicio",
-            desde) { seleccionarHora(true) }
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ItemHora("Desde", "Define la hora de inicio", desde) { seleccionarHora(true) }
+            ItemHora("Hasta", "Define la hora de fin", hasta) { seleccionarHora(false) }
+        }
 
-        ItemHora("Hasta", "Define la hora de fin",
-            hasta) { seleccionarHora(false) }
-
-        Text("Excepciones de Silencio",
+        // 🔹 Excepciones
+        Text(
+            "Excepciones de Silencio",
             color = Color(0xFFB0B8C1),
             fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold)
+            fontWeight = FontWeight.SemiBold
+        )
 
-        ItemSwitch("Permitir Alertas Críticas",
+        ItemSwitch(
+            "Permitir Alertas Críticas",
             "Viento, lluvia fuerte, etc.",
-            alertasCriticas) { alertasCriticas = it; actualizar() }
+            alertasCriticas
+        ) { alertasCriticas = it; actualizarFirebase() }
 
+        // 🔹 Estado actual
         Card(
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF12212B)),
@@ -106,6 +119,8 @@ fun ModoSilencio() {
     }
 }
 
+
+
 @Composable
 private fun ItemSwitch(titulo: String, desc: String?, valor: Boolean, onChange: (Boolean) -> Unit) {
     Card(
@@ -119,10 +134,7 @@ private fun ItemSwitch(titulo: String, desc: String?, valor: Boolean, onChange: 
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.width(220.dp)) {
-                Text(titulo,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium)
+                Text(titulo, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 desc?.let { Text(it, color = Color(0xFF8FA0AB), fontSize = 13.sp) }
             }
             Switch(
@@ -133,7 +145,6 @@ private fun ItemSwitch(titulo: String, desc: String?, valor: Boolean, onChange: 
                     uncheckedThumbColor = Color(0xFFB0B8C1)
                 )
             )
-
         }
     }
 }
@@ -149,23 +160,14 @@ private fun ItemHora(titulo: String, desc: String, hora: String, onClick: () -> 
     ) {
         Row(
             Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column {
-                Text(titulo,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium)
-
-                Text(desc,
-                    color = Color(0xFF8FA0AB),
-                    fontSize = 13.sp)
+            Column(modifier = Modifier.width(220.dp)) {
+                Text(titulo, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                Text(desc, color = Color(0xFF8FA0AB), fontSize = 13.sp)
             }
-            Text(hora,
-                color = Color(0xFF23A8F2),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold)
+            Text(hora, color = Color(0xFF23A8F2), fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
     }
 }

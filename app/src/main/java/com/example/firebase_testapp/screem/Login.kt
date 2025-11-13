@@ -19,6 +19,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.firebase_testapp.R
+import com.example.firebase_testapp.loginLogic.loginUsuarioRealtime
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,12 +113,14 @@ fun PantallaLogin(onLoginSuccess: () -> Unit) {
             Button(
                 onClick = {
                     if (username.isNotEmpty() && password.isNotEmpty()) {
-                        println("Intentando iniciar sesión con: $username / $password")
-                        onLoginSuccess()
+                        loginUsuarioRealtime(username, password) { success, msg ->
+                            if (success) onLoginSuccess() else mensaje = msg
+                        }
                     } else {
                         mensaje = "Por favor, completa todos los campos."
                     }
-                },
+                }
+                ,
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF23A8F2),

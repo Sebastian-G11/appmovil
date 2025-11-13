@@ -14,39 +14,22 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.google.firebase.database.FirebaseDatabase
+import com.example.firebase_testapp.LeerFirebase
+import com.example.firebase_testapp.escribirFirebase
 
 @Composable
 fun ModoTecho() {
-    val databaseModo = FirebaseDatabase.getInstance().getReference("techo/modo")
-    val databaseEstado = FirebaseDatabase.getInstance().getReference("techo/estado")
+    // ✅ Leer valores desde Firebase automáticamente
+    val (modoActual) = LeerFirebase("techo/modo", String::class.java)
+    val (estadoTecho) = LeerFirebase("techo/estado", String::class.java)
 
-    var modoActual by remember { mutableStateOf<String?>(null) }
-    var estadoTecho by remember { mutableStateOf<String?>(null) }
-
-    // Escuchar cambios de modo y estado desde Firebase
-    LaunchedEffect(Unit) {
-        databaseModo.addValueEventListener(object : com.google.firebase.database.ValueEventListener {
-            override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
-                modoActual = snapshot.getValue(String::class.java)
-            }
-            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {}
-        })
-
-        databaseEstado.addValueEventListener(object : com.google.firebase.database.ValueEventListener {
-            override fun onDataChange(snapshot: com.google.firebase.database.DataSnapshot) {
-                estadoTecho = snapshot.getValue(String::class.java)
-            }
-            override fun onCancelled(error: com.google.firebase.database.DatabaseError) {}
-        })
-    }
-
+    // ✅ Funciones para escribir nuevos valores
     fun actualizarModo(nuevoModo: String) {
-        databaseModo.setValue(nuevoModo)
+        escribirFirebase("techo/modo", nuevoModo)
     }
 
     fun actualizarEstado(nuevoEstado: String) {
-        databaseEstado.setValue(nuevoEstado)
+        escribirFirebase("techo/estado", nuevoEstado)
     }
 
     Box(
@@ -97,8 +80,6 @@ fun ModoTecho() {
             }
 
             Spacer(modifier = Modifier.height(16.dp))
-
-
         }
     }
 }
@@ -191,12 +172,12 @@ fun EstadoTechoPanel(
         ) {
             ControlButton(
                 texto = "Abrir",
-                icono = R.drawable.up, // usa tu ícono de abrir
+                icono = R.drawable.up,
                 onClick = onAbrir
             )
             ControlButton(
                 texto = "Cerrar",
-                icono = R.drawable.down, // usa tu ícono de cerrar
+                icono = R.drawable.down,
                 onClick = onCerrar
             )
         }

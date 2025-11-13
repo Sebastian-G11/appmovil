@@ -1,5 +1,6 @@
 package com.example.firebase_testapp
 
+import BarraNavegacion
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,10 +18,12 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
 import com.example.componentestest.Componentes.Firebase.PantallaLogin
+import registrarAdmin
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        registrarAdmin()
         setContent {
             AppPrincipal()
         }
@@ -56,59 +59,5 @@ fun AppPrincipal() {
     }
 }
 
-@Composable
-fun BarraNavegacion(navController: NavHostController) {
-    val items = listOf(
-        BottomNavItem("Techo", "techo", R.drawable.casa),
-        BottomNavItem("Clima", "clima", R.drawable.clima),
-        BottomNavItem("Silencio", "silencio", R.drawable.campana)
-    )
 
-    NavigationBar(
-        containerColor = Color(0xFF111B22,),
-        modifier = Modifier.height(60.dp)
-    ) {
 
-        val currentRoute = currentRoute(navController)
-        items.forEach { item ->
-            NavigationBarItem(
-                modifier = Modifier.size(25.dp),
-                selected = currentRoute == item.route,
-                onClick = {
-                    navController.navigate(item.route) {
-                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-
-                    }
-                },
-                icon = {
-                    Image(
-                        painter = painterResource(id = item.icon),
-                        contentDescription = item.label,
-                        modifier = Modifier.size(25.dp)
-                    )
-                },
-                label = {
-                    Text(
-                        text = item.label,
-                        color = if (currentRoute == item.route) Color.White else Color.White,
-                        fontSize = MaterialTheme.typography.labelSmall.fontSize
-                    )
-                },
-            )
-        }
-    }
-}
-
-data class BottomNavItem(
-    val label: String,
-    val route: String,
-    val icon: Int
-)
-
-@Composable
-fun currentRoute(navController: NavHostController): String? {
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    return navBackStackEntry?.destination?.route
-}
