@@ -5,7 +5,9 @@ import android.location.Location
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,14 +18,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.firebase_testapp.model.Respuesta
+import com.example.firebase_testapp.model.*
 import com.example.firebase_testapp.network.RetrofitClient
 import com.example.firebase_testapp.network.WeatherApi
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.*
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -33,7 +33,8 @@ fun PantallaClima(apiKey: String) {
         LocationServices.getFusedLocationProviderClient(context)
 
     var currentWeather by remember { mutableStateOf<Respuesta?>(null) }
-    var forecast by remember { mutableStateOf<Respuesta?>(null) }
+    var forecast by remember { mutableStateOf<ForecastResponse?>(null) }
+
     var isLoading by remember { mutableStateOf(true) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -46,15 +47,16 @@ fun PantallaClima(apiKey: String) {
                     scope.launch {
                         try {
                             val api = RetrofitClient.instance.create(WeatherApi::class.java)
-                            currentWeather = api.getCurrentWeather(location.latitude, location.longitude, apiKey)
-                            forecast = api.getForecast(location.latitude, location.longitude, apiKey)
-                            println("✅ Clima y pronóstico obtenidos correctamente.")
-                        }
-                        catch (e: Exception) {
+
+                            currentWeather =
+                                api.getCurrentWeather(location.latitude, location.longitude, apiKey)
+
+                            forecast =
+                                api.getForecast(location.latitude, location.longitude, apiKey)
+
+                        } catch (e: Exception) {
                             errorMessage = e.message ?: "Error desconocido"
-                            println("❌ Error al obtener clima: $errorMessage")
-                        }
-                        finally {
+                        } finally {
                             isLoading = false
                         }
                     }
@@ -72,7 +74,7 @@ fun PantallaClima(apiKey: String) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0C141A)),
+            .background(Color(0xFF0C141A)),//fondo de pantalla
         contentAlignment = Alignment.Center
     ) {
         when {
@@ -92,9 +94,11 @@ fun PantallaClima(apiKey: String) {
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier
                         .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
                         .padding(horizontal = 24.dp, vertical = 32.dp)
                 ) {
-                    // Ícono del clima actual
+
+                    // Ícono clima actual
                     Image(
                         painter = painterResource(id = iconId),
                         contentDescription = "Clima actual",
@@ -113,7 +117,7 @@ fun PantallaClima(apiKey: String) {
 
                     // Descripción
                     Text(
-                        text = data.weather.firstOrNull()?.description?.replaceFirstChar { it.uppercase() } ?: "",
+                        text = data.weather.first().description.replaceFirstChar { it.uppercase() },
                         fontSize = 18.sp,
                         color = Color.White
                     )
@@ -140,6 +144,31 @@ fun PantallaClima(apiKey: String) {
                     Spacer(modifier = Modifier.height(32.dp))
 
 
+                    if (forecast != null) {
+                        val nextDays = getNext3DaysForecast(forecast!!)
+
+                        Text(
+                            text = "Próximos 3 días",
+                            fontSize = 22.sp,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(bottom = 12.dp)
+                        )
+
+                        Column {
+                            nextDays.forEach { item ->
+                                val date = item.dt_txt.substring(0, 10)
+                                val icon = getWeatherIcon(item.weather.first().icon)
+                                val temp = "${item.main.temp.toInt()}°C"
+
+                                DailyForecastRow(
+                                    day = date,
+                                    iconRes = icon,
+                                    temp = temp
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -152,7 +181,17 @@ fun PantallaClima(apiKey: String) {
     }
 }
 
-// 🌦️ Mapeo de íconos
+
+fun getNext3DaysForecast(forecast: ForecastResponse): List<ForecastItem> {
+    return forecast.list
+        .groupBy { it.dt_txt.substring(0, 10) } // Agrupa por YYYY-MM-DD
+        .entries
+        .take(3) // cambia numero de dias jijiji
+        .map { entry ->
+            entry.value[3] // el registro de mediodía
+        }
+}
+
 fun getWeatherIcon(iconCode: String): Int {
     return when (iconCode) {
         "01d" -> R.drawable.sun
@@ -170,10 +209,11 @@ fun getWeatherIcon(iconCode: String): Int {
     }
 }
 
+
 @Composable
 fun InfoCard(label: String, value: String, iconRes: Int) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF111B22)),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF111B22)),// burbuja cuadrada
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.padding(4.dp)
     ) {
@@ -191,6 +231,7 @@ fun InfoCard(label: String, value: String, iconRes: Int) {
         }
     }
 }
+
 
 @Composable
 fun DailyForecastRow(day: String, iconRes: Int, temp: String) {

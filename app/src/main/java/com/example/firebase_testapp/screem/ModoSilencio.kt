@@ -4,6 +4,8 @@ import android.app.TimePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -20,16 +22,13 @@ import java.util.*
 fun ModoSilencio() {
     val context = LocalContext.current
 
-    // se lee el objeto completo desde Firebase
     val (datos) = LeerFirebase("modo_silencio", Map::class.java)
 
-    // Estados locales sincronizados
     var modoNoche by remember { mutableStateOf(false) }
     var alertasCriticas by remember { mutableStateOf(false) }
     var desde by remember { mutableStateOf("23:00") }
     var hasta by remember { mutableStateOf("07:00") }
 
-    // Actualizar estados cuando cambien los datos en Firebase
     LaunchedEffect(datos) {
         if (datos != null) {
             modoNoche = (datos["activo"] as? Boolean) ?: false
@@ -60,23 +59,25 @@ fun ModoSilencio() {
     Column(
         Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())   // ← SCROLL AGREGADO
             .background(Color(0xFF0C141A))
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         Text("Modo Silencio", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
 
-        Text("Reduce las interrupciones durante la noche.",
-            color = Color(0xFF8FA0AB), fontSize = 14.sp)
+        Text(
+            "Reduce las interrupciones durante la noche.",
+            color = Color(0xFF8FA0AB),
+            fontSize = 14.sp
+        )
 
-        //activar modo noche
         ItemSwitch(
             "Activar Modo Noche",
             null,
             modoNoche
         ) { modoNoche = it; actualizarFirebase() }
 
-        //Horario programado
         Text(
             "Horario Programado",
             color = Color(0xFFB0B8C1),
@@ -89,7 +90,6 @@ fun ModoSilencio() {
             ItemHora("Hasta", "Define la hora de fin", hasta) { seleccionarHora(false) }
         }
 
-        // 🔹 Excepciones
         Text(
             "Excepciones de Silencio",
             color = Color(0xFFB0B8C1),
@@ -103,7 +103,6 @@ fun ModoSilencio() {
             alertasCriticas
         ) { alertasCriticas = it; actualizarFirebase() }
 
-        // 🔹 Estado actual
         Card(
             shape = RoundedCornerShape(12.dp),
             colors = CardDefaults.cardColors(containerColor = Color(0xFF12212B)),
@@ -133,10 +132,17 @@ private fun ItemSwitch(titulo: String, desc: String?, valor: Boolean, onChange: 
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.width(220.dp)) {
+            Column(modifier = Modifier.weight(1f)) {    // ← ANTES width(220dp)
                 Text(titulo, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                desc?.let { Text(it, color = Color(0xFF8FA0AB), fontSize = 13.sp) }
+                desc?.let {
+                    Text(
+                        it,
+                        color = Color(0xFF8FA0AB),
+                        fontSize = 13.sp
+                    )
+                }
             }
+
             Switch(
                 checked = valor,
                 onCheckedChange = onChange,
@@ -163,10 +169,11 @@ private fun ItemHora(titulo: String, desc: String, hora: String, onClick: () -> 
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.width(220.dp)) {
+            Column(modifier = Modifier.weight(1f)) {    // ← ANTES width(220dp)
                 Text(titulo, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 Text(desc, color = Color(0xFF8FA0AB), fontSize = 13.sp)
             }
+
             Text(hora, color = Color(0xFF23A8F2), fontSize = 18.sp, fontWeight = FontWeight.Bold)
         }
     }

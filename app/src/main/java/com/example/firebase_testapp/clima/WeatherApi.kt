@@ -1,5 +1,6 @@
 package com.example.firebase_testapp.network
 
+import com.example.firebase_testapp.model.ForecastResponse
 import com.example.firebase_testapp.model.Respuesta
 import retrofit2.http.GET
 import retrofit2.http.Query
@@ -21,5 +22,5 @@ interface WeatherApi {
         @Query("appid") apiKey: String,
         @Query("units") units: String = "metric",
         @Query("lang") lang: String = "es"
-    ): Respuesta
+    ): ForecastResponse
 }

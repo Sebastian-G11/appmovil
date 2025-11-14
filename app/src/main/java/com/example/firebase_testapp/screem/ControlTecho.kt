@@ -19,11 +19,11 @@ import com.example.firebase_testapp.escribirFirebase
 
 @Composable
 fun ModoTecho() {
-    // ✅ Leer valores desde Firebase automáticamente
+    //leer valores desde Firebase automáticamente
     val (modoActual) = LeerFirebase("techo/modo", String::class.java)
     val (estadoTecho) = LeerFirebase("techo/estado", String::class.java)
 
-    // ✅ Funciones para escribir nuevos valores
+    //funciones para escribir nuevos valores
     fun actualizarModo(nuevoModo: String) {
         escribirFirebase("techo/modo", nuevoModo)
     }
@@ -70,7 +70,7 @@ fun ModoTecho() {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // 🧭 Panel Manual (solo visible si está en modo manual)
+            //Panel Manual (solo visible si está en modo manual)
             if (modoActual == "Manual") {
                 EstadoTechoPanel(
                     estado = estadoTecho ?: "Desconocido",

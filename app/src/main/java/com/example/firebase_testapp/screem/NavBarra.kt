@@ -23,7 +23,7 @@ fun BarraNavegacion(navController: NavHostController) {
 
     NavigationBar(
         containerColor = Color(0xFF111B22),
-        modifier = Modifier.height(60.dp)
+        modifier = Modifier.height(60.dp) //edita el tamaño de la barra
     ) {
         val currentRoute = currentRoute(navController)
         items.forEach { item ->
@@ -55,7 +55,7 @@ fun BarraNavegacion(navController: NavHostController) {
     }
 }
 
-// ✅ Eliminamos el "TODO" duplicado
+
 data class BottomNavItem(
     val label: String,
     val route: String,
