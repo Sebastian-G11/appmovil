@@ -188,7 +188,9 @@ fun getNext3DaysForecast(forecast: ForecastResponse): List<ForecastItem> {
         .entries
         .take(3) // cambia numero de dias jijiji
         .map { entry ->
-            entry.value[3] // el registro de mediodía
+            val items = entry.value
+            val mediodia = items.find { it.dt_txt.contains("12:00:00") }
+            mediodia ?: items.getOrNull(items.size / 2) ?: items.first()
         }
 }
 

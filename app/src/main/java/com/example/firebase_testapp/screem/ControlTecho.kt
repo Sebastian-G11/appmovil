@@ -143,7 +143,7 @@ fun ModoCard(
     }
 }
 
-// 🌤 Panel de control manual del techo
+//Panel de control manual del techo
 @Composable
 fun EstadoTechoPanel(
     estado: String,

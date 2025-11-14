@@ -59,7 +59,7 @@ fun ModoSilencio() {
     Column(
         Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())   // ← SCROLL AGREGADO
+            .verticalScroll(rememberScrollState())   // SCROLL AGREGADO
             .background(Color(0xFF0C141A))
             .padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(18.dp)
@@ -132,7 +132,7 @@ private fun ItemSwitch(titulo: String, desc: String?, valor: Boolean, onChange: 
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.weight(1f)) {    // ← ANTES width(220dp)
+            Column(modifier = Modifier.weight(1f)) {
                 Text(titulo, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 desc?.let {
                     Text(
@@ -169,7 +169,7 @@ private fun ItemHora(titulo: String, desc: String, hora: String, onClick: () -> 
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.weight(1f)) {    // ← ANTES width(220dp)
+            Column(modifier = Modifier.weight(1f)) {
                 Text(titulo, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 Text(desc, color = Color(0xFF8FA0AB), fontSize = 13.sp)
             }
