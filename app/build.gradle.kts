@@ -50,7 +50,7 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.google.android.gms:play-services-location:21.0.1")
-
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("androidx.compose.material3:material3:1.3.1")
 
     implementation(libs.androidx.core.ktx)
@@ -70,6 +70,9 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.compose.ui.text)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.compose.ui.unit)
+    implementation(libs.play.services.cast.framework)
+    implementation(libs.androidx.foundation)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

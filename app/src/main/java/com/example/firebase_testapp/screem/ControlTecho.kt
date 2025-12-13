@@ -10,39 +10,88 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.firebase_testapp.LeerFirebase
-import com.example.firebase_testapp.escribirFirebase
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 @Composable
 fun ModoTecho() {
-    //leer valores desde Firebase automáticamente
-    val (modoActual) = LeerFirebase("techo/modo", String::class.java)
-    val (estadoTecho) = LeerFirebase("techo/estado", String::class.java)
 
-    //funciones para escribir nuevos valores
+    // Se leen los valores desde Firebase usando el helper genérico.
+    // LeerFirebase devuelve un Triple (valor, loading, error),
+    // por lo que se desestructura explícitamente para evitar recomposiciones erráticas.
+    val (modoActualRaw, _, _) =
+        LeerFirebase("techo/modo", String::class.java)
+
+    val (estadoTechoRaw, _, _) =
+        LeerFirebase("techo/estado", String::class.java)
+
+    // Se asignan valores por defecto para evitar null durante recomposición
+    // cuando Firebase aún no ha respondido.
+    val modoActual = modoActualRaw ?: "Desconocido"
+    val estadoTecho = estadoTechoRaw ?: "Desconocido"
+
+    // Contexto necesario para acceder a DataStore
+    val context = LocalContext.current
+
+    // Scope para lanzar corrutinas desde eventos UI
+    val scope = rememberCoroutineScope()
+
+    // Mensaje local solo para feedback visual al usuario
+    var mensajeComando by remember { mutableStateOf("") }
+
+    // Escritura directa del modo en Firebase
     fun actualizarModo(nuevoModo: String) {
         escribirFirebase("techo/modo", nuevoModo)
     }
 
+    // Escritura protegida del estado del techo
+    // Si el estado ya es el mismo, se evita escribir nuevamente
+    // para cortar bucles de escritura Firebase -> Compose -> Firebase.
     fun actualizarEstado(nuevoEstado: String) {
+        if (estadoTechoRaw == nuevoEstado) return
         escribirFirebase("techo/estado", nuevoEstado)
+    }
+
+    /*
+     Reenvío automático de comandos guardados localmente.
+     Este bloque se ejecuta cuando Firebase vuelve a entregar datos
+     (por ejemplo, al reconectar a internet).
+
+     - Lee el último comando almacenado en DataStore
+     - Si es distinto al estado actual recibido desde Firebase,
+       lo reenvía una sola vez.
+     */
+    LaunchedEffect(estadoTechoRaw) {
+        if (estadoTechoRaw != null) {
+            val prefs = context.sessionDataStore.data.first()
+            val ultimoComando = prefs[stringPreferencesKey("last_comando")]
+            if (ultimoComando != null && ultimoComando != estadoTechoRaw) {
+                actualizarEstado(ultimoComando)
+            }
+        }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF0C141A))
+            .systemBarsPadding()   // ← CAMBIO CLAVE
             .padding(24.dp),
         contentAlignment = Alignment.TopCenter
-    ) {
+    )
+    {
         Column(
             verticalArrangement = Arrangement.spacedBy(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+
             Text(
                 text = "Selecciona el modo del techo",
                 color = Color.White,
@@ -50,7 +99,7 @@ fun ModoTecho() {
                 fontWeight = FontWeight.Bold
             )
 
-            // Tarjeta Automático
+            // Selector de modo automático
             ModoCard(
                 titulo = "Automático",
                 descripcion = "El techo se abrirá y cerrará según el clima y la hora.",
@@ -59,7 +108,7 @@ fun ModoTecho() {
                 onClick = { actualizarModo("Automático") }
             )
 
-            // Tarjeta Manual
+            // Selector de modo manual
             ModoCard(
                 titulo = "Manual",
                 descripcion = "Controla manualmente el techo.",
@@ -70,19 +119,65 @@ fun ModoTecho() {
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            //Panel Manual (solo visible si está en modo manual)
-            if (modoActual == "Manual") {
+            /*
+             El panel manual solo se muestra si:
+             - El modo es Manual
+             - Firebase ya entregó un estado válido (estadoTechoRaw != null)
+
+             Esto evita ejecutar acciones sobre un estado inexistente.
+             */
+            if (modoActual == "Manual" && estadoTechoRaw != null) {
                 EstadoTechoPanel(
-                    estado = estadoTecho ?: "Desconocido",
-                    onAbrir = { actualizarEstado("Abierto") },
-                    onCerrar = { actualizarEstado("Cerrado") }
+                    estado = estadoTecho,
+                    onAbrir = {
+                        // Se guarda el comando localmente para modo offline
+                        scope.launch {
+                            context.sessionDataStore.edit {
+                                it[stringPreferencesKey("last_comando")] = "Abierto"
+                            }
+                        }
+                        actualizarEstado("Abierto")
+                        mensajeComando = "Comando enviado al dispositivo"
+                    },
+                    onCerrar = {
+                        scope.launch {
+                            context.sessionDataStore.edit {
+                                it[stringPreferencesKey("last_comando")] = "Cerrado"
+                            }
+                        }
+                        actualizarEstado("Cerrado")
+                        mensajeComando = "Comando enviado al dispositivo"
+                    }
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            // Indicador visual cuando Firebase aún no responde (modo local)
+            if (estadoTechoRaw == null) {
+                Text(
+                    text = "Modo local activo. Se sincronizará al reconectar.",
+                    color = Color.Yellow,
+                    fontSize = 14.sp
+                )
+            }
+
+            // Feedback simple al usuario tras enviar un comando
+            if (mensajeComando.isNotEmpty()) {
+                Text(
+                    text = mensajeComando,
+                    color = Color.Green,
+                    fontSize = 14.sp
+                )
+            }
         }
     }
 }
+
+/* ======================================================
+   COMPONENTES UI
+   Se mantienen en el mismo archivo para evitar
+   errores de referencia no resuelta.
+   No contienen lógica de negocio.
+   ====================================================== */
 
 @Composable
 fun ModoCard(
@@ -104,11 +199,8 @@ fun ModoCard(
             .clickable { onClick() }
     ) {
         Row(
-            modifier = Modifier
-                .padding(16.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 painter = painterResource(id = icono),
@@ -117,10 +209,12 @@ fun ModoCard(
                 modifier = Modifier.size(32.dp)
             )
 
-            Column(modifier = Modifier.weight(1f)) {
+            Spacer(modifier = Modifier.width(16.dp))
+
+            Column(Modifier.weight(1f)) {
                 Text(
                     text = titulo,
-                    color = if (seleccionado) Color.White else Color(0xFFB0B8C1),
+                    color = Color.White,
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp
                 )
@@ -133,7 +227,7 @@ fun ModoCard(
 
             RadioButton(
                 selected = seleccionado,
-                onClick = { onClick() },
+                onClick = onClick,
                 colors = RadioButtonDefaults.colors(
                     selectedColor = Color(0xFF23A8F2),
                     unselectedColor = Color(0xFFB0B8C1)
@@ -143,7 +237,6 @@ fun ModoCard(
     }
 }
 
-//Panel de control manual del techo
 @Composable
 fun EstadoTechoPanel(
     estado: String,
@@ -160,6 +253,7 @@ fun EstadoTechoPanel(
             fontSize = 16.sp,
             fontWeight = FontWeight.Medium
         )
+
         Text(
             text = estado,
             color = Color(0xFF23A8F2),
@@ -167,19 +261,9 @@ fun EstadoTechoPanel(
             fontWeight = FontWeight.Bold
         )
 
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            ControlButton(
-                texto = "Abrir",
-                icono = R.drawable.up,
-                onClick = onAbrir
-            )
-            ControlButton(
-                texto = "Cerrar",
-                icono = R.drawable.down,
-                onClick = onCerrar
-            )
+        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            ControlButton("Abrir", R.drawable.up, onAbrir)
+            ControlButton("Cerrar", R.drawable.down, onCerrar)
         }
     }
 }

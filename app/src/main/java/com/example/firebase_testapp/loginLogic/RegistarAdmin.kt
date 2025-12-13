@@ -1,3 +1,5 @@
+package com.example.firebase_testapp.loginLogic
+
 import com.google.firebase.database.FirebaseDatabase
 
 fun registrarAdmin() {
@@ -8,7 +10,8 @@ fun registrarAdmin() {
         if (!it.exists()) {
             val adminData = mapOf(
                 "user" to "admin",
-                "password" to "1234",
+                // Se usa la misma función hash definida en loginUsuarioRealtime.kt
+                "password" to hashPassword("1234")
             )
             adminRef.setValue(adminData)
         }

@@ -11,6 +11,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -20,10 +21,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.firebase_testapp.R
 import com.example.firebase_testapp.loginLogic.loginUsuarioRealtime
+import com.example.firebase_testapp.loginLogic.SessionManager
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaLogin(onLoginSuccess: () -> Unit) {
+
+    val context = LocalContext.current
+
+    // Cambio funcional: se usa el SessionManager propio del proyecto
+    val sessionManager = remember { SessionManager(context) }
+    val scope = rememberCoroutineScope()
+
     var username by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
     var mensaje by remember { mutableStateOf("") }
@@ -42,16 +52,14 @@ fun PantallaLogin(onLoginSuccess: () -> Unit) {
                 .fillMaxWidth()
         ) {
 
-            //Ícono superior
             Image(
-                painter = painterResource(id = R.drawable.house_2), // Reemplaza por tu ícono real
+                painter = painterResource(id = R.drawable.house_2),
                 contentDescription = "Icono casa",
                 modifier = Modifier
                     .size(80.dp)
                     .padding(bottom = 16.dp)
             )
 
-            // Texto de bienvenida
             Text(
                 text = "Bienvenido de nuevo",
                 fontSize = 22.sp,
@@ -67,7 +75,6 @@ fun PantallaLogin(onLoginSuccess: () -> Unit) {
                 modifier = Modifier.padding(bottom = 32.dp, top = 4.dp)
             )
 
-            // Campo de usuario
             OutlinedTextField(
                 value = username,
                 onValueChange = { username = it },
@@ -75,7 +82,6 @@ fun PantallaLogin(onLoginSuccess: () -> Unit) {
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
                 shape = RoundedCornerShape(10.dp),
-
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Color(0xFF23A8F2),
                     unfocusedBorderColor = Color(0xFF263238),
@@ -88,7 +94,6 @@ fun PantallaLogin(onLoginSuccess: () -> Unit) {
                     .padding(bottom = 16.dp)
             )
 
-            // Campo de contraseña
             OutlinedTextField(
                 value = password,
                 onValueChange = { password = it },
@@ -109,18 +114,23 @@ fun PantallaLogin(onLoginSuccess: () -> Unit) {
                     .padding(bottom = 32.dp)
             )
 
-            // Botón Iniciar Sesión
             Button(
                 onClick = {
                     if (username.isNotEmpty() && password.isNotEmpty()) {
                         loginUsuarioRealtime(username, password) { success, msg ->
-                            if (success) onLoginSuccess() else mensaje = msg
+                            if (success) {
+                                scope.launch {
+                                    sessionManager.saveLoginState(true)
+                                    onLoginSuccess()
+                                }
+                            } else {
+                                mensaje = msg
+                            }
                         }
                     } else {
                         mensaje = "Por favor, completa todos los campos."
                     }
-                }
-                ,
+                },
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color(0xFF23A8F2),

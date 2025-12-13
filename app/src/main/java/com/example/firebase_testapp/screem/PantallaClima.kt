@@ -1,7 +1,11 @@
 package com.example.firebase_testapp
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.location.Location
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -18,6 +22,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.example.firebase_testapp.model.*
 import com.example.firebase_testapp.network.RetrofitClient
 import com.example.firebase_testapp.network.WeatherApi
@@ -28,63 +33,141 @@ import kotlinx.coroutines.launch
 @SuppressLint("MissingPermission")
 @Composable
 fun PantallaClima(apiKey: String) {
+
     val context = LocalContext.current
+
     val fusedLocationClient: FusedLocationProviderClient =
         LocationServices.getFusedLocationProviderClient(context)
+
+    // Estado de permiso de ubicación
+    var hasLocationPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasLocationPermission = granted
+    }
 
     var currentWeather by remember { mutableStateOf<Respuesta?>(null) }
     var forecast by remember { mutableStateOf<ForecastResponse?>(null) }
 
-    var isLoading by remember { mutableStateOf(true) }
+    // Cambio: isLoading inicia en false para permitir reintentos manuales
+    var isLoading by remember { mutableStateOf(false) }
+
+    // Mensaje de error para controlar UI de reintento
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
     val scope = rememberCoroutineScope()
 
+    // Solicita permiso al iniciar si no existe
     LaunchedEffect(Unit) {
+        if (!hasLocationPermission) {
+            permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+    }
+
+    // Cambio: lógica de carga encapsulada para reutilizar en "Reintentar"
+    fun cargarClima() {
+
+        if (!hasLocationPermission) {
+            errorMessage = "Permiso de ubicación requerido."
+            return
+        }
+
+        isLoading = true
+        errorMessage = null
+
         fusedLocationClient.lastLocation
             .addOnSuccessListener { location: Location? ->
-                if (location != null) {
-                    scope.launch {
-                        try {
-                            val api = RetrofitClient.instance.create(WeatherApi::class.java)
 
-                            currentWeather =
-                                api.getCurrentWeather(location.latitude, location.longitude, apiKey)
-
-                            forecast =
-                                api.getForecast(location.latitude, location.longitude, apiKey)
-
-                        } catch (e: Exception) {
-                            errorMessage = e.message ?: "Error desconocido"
-                        } finally {
-                            isLoading = false
-                        }
-                    }
-                } else {
+                if (location == null) {
                     errorMessage = "No se pudo obtener la ubicación."
                     isLoading = false
+                    return@addOnSuccessListener
+                }
+
+                scope.launch {
+                    try {
+                        val api =
+                            RetrofitClient.instance.create(WeatherApi::class.java)
+
+                        currentWeather = api.getCurrentWeather(
+                            location.latitude,
+                            location.longitude,
+                            apiKey
+                        )
+
+                        forecast = api.getForecast(
+                            location.latitude,
+                            location.longitude,
+                            apiKey
+                        )
+
+                    } catch (e: Exception) {
+                        // Cambio: mensaje claro para falta de internet
+                        errorMessage = "Sin conexión a internet. Intenta nuevamente."
+                    } finally {
+                        isLoading = false
+                    }
                 }
             }
             .addOnFailureListener {
-                errorMessage = "Error al acceder a la ubicación: ${it.message}"
+                errorMessage = "Error al acceder a la ubicación."
                 isLoading = false
             }
+    }
+
+    // Carga inicial cuando el permiso es concedido
+    LaunchedEffect(hasLocationPermission) {
+        if (hasLocationPermission) {
+            cargarClima()
+        }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0C141A)),//fondo de pantalla
+            .background(Color(0xFF0C141A))
+            .systemBarsPadding(),  // ← CAMBIO CLAVE
         contentAlignment = Alignment.Center
-    ) {
+    )
+    {
         when {
-            isLoading -> CircularProgressIndicator(color = Color(0xFF23A8F2))
 
-            errorMessage != null -> Text(
-                text = errorMessage ?: "Error desconocido",
-                color = Color.White,
-                fontSize = 18.sp
-            )
+            isLoading -> {
+                CircularProgressIndicator(color = Color(0xFF23A8F2))
+            }
+
+            // Cambio: UI de error con botón Reintentar
+            errorMessage != null -> {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    Text(
+                        text = errorMessage!!,
+                        color = Color.White,
+                        fontSize = 18.sp
+                    )
+
+                    Button(
+                        onClick = { cargarClima() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF23A8F2)
+                        )
+                    ) {
+                        Text("Reintentar")
+                    }
+                }
+            }
 
             currentWeather != null -> {
                 val data = currentWeather!!
@@ -98,7 +181,6 @@ fun PantallaClima(apiKey: String) {
                         .padding(horizontal = 24.dp, vertical = 32.dp)
                 ) {
 
-                    // Ícono clima actual
                     Image(
                         painter = painterResource(id = iconId),
                         contentDescription = "Clima actual",
@@ -107,7 +189,6 @@ fun PantallaClima(apiKey: String) {
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Ciudad
                     Text(
                         text = data.name,
                         fontSize = 24.sp,
@@ -115,14 +196,13 @@ fun PantallaClima(apiKey: String) {
                         fontWeight = FontWeight.Bold
                     )
 
-                    // Descripción
                     Text(
-                        text = data.weather.first().description.replaceFirstChar { it.uppercase() },
+                        text = data.weather.first().description
+                            .replaceFirstChar { it.uppercase() },
                         fontSize = 18.sp,
                         color = Color.White
                     )
 
-                    // Temperatura
                     Text(
                         text = "${data.main.temp.toInt()}°C",
                         fontSize = 48.sp,
@@ -132,7 +212,6 @@ fun PantallaClima(apiKey: String) {
 
                     Spacer(modifier = Modifier.height(24.dp))
 
-                    // Info adicional
                     Row(
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         modifier = Modifier.fillMaxWidth()
@@ -142,7 +221,6 @@ fun PantallaClima(apiKey: String) {
                     }
 
                     Spacer(modifier = Modifier.height(32.dp))
-
 
                     if (forecast != null) {
                         val nextDays = getNext3DaysForecast(forecast!!)
@@ -157,36 +235,27 @@ fun PantallaClima(apiKey: String) {
 
                         Column {
                             nextDays.forEach { item ->
-                                val date = item.dt_txt.substring(0, 10)
-                                val icon = getWeatherIcon(item.weather.first().icon)
-                                val temp = "${item.main.temp.toInt()}°C"
-
                                 DailyForecastRow(
-                                    day = date,
-                                    iconRes = icon,
-                                    temp = temp
+                                    day = item.dt_txt.substring(0, 10),
+                                    iconRes = getWeatherIcon(item.weather.first().icon),
+                                    temp = "${item.main.temp.toInt()}°C"
                                 )
                             }
                         }
                     }
                 }
             }
-
-            else -> Text(
-                text = "No se pudo obtener el clima.",
-                color = Color.White,
-                fontSize = 18.sp
-            )
         }
     }
 }
 
+/* ================= FUNCIONES AUXILIARES ================= */
 
 fun getNext3DaysForecast(forecast: ForecastResponse): List<ForecastItem> {
     return forecast.list
-        .groupBy { it.dt_txt.substring(0, 10) } // Agrupa por YYYY-MM-DD
+        .groupBy { it.dt_txt.substring(0, 10) }
         .entries
-        .take(3) // cambia numero de dias jijiji
+        .take(3)
         .map { entry ->
             val items = entry.value
             val mediodia = items.find { it.dt_txt.contains("12:00:00") }
@@ -211,11 +280,10 @@ fun getWeatherIcon(iconCode: String): Int {
     }
 }
 
-
 @Composable
 fun InfoCard(label: String, value: String, iconRes: Int) {
     Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF111B22)),// burbuja cuadrada
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF111B22)),
         shape = RoundedCornerShape(12.dp),
         modifier = Modifier.padding(4.dp)
     ) {
@@ -233,7 +301,6 @@ fun InfoCard(label: String, value: String, iconRes: Int) {
         }
     }
 }
-
 
 @Composable
 fun DailyForecastRow(day: String, iconRes: Int, temp: String) {
