@@ -1,4 +1,8 @@
 package com.example.firebase_testapp.screem
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import com.google.firebase.database.FirebaseDatabase
 
 import android.app.TimePickerDialog
 import androidx.compose.foundation.Image
@@ -28,6 +32,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
+import com.example.firebase_testapp.R
+import com.example.firebase_testapp.hayInternet
 
 data class AccionUsuario(
     val accion: String = "",
@@ -38,8 +44,17 @@ data class AccionUsuario(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PantallaAjustes() {
+    val KEY_MODO_NOCHE = booleanPreferencesKey("modo_noche")
+    val KEY_DESDE_NOCHE = stringPreferencesKey("desde_noche")
+    val KEY_HASTA_NOCHE = stringPreferencesKey("hasta_noche")
 
+    val KEY_HUM_MIN = floatPreferencesKey("hum_min")
+    val KEY_HUM_MAX = floatPreferencesKey("hum_max")
     val context = LocalContext.current
+    var sinConexion by remember { mutableStateOf(!hayInternet(context)) }
+    var huboDesconexion by remember { mutableStateOf(false) }
+
+
     val scope = rememberCoroutineScope()
     val dbRef = remember { FirebaseDatabase.getInstance().getReference("config_notificaciones") }
 
@@ -56,54 +71,123 @@ fun PantallaAjustes() {
 
     // Historial de acciones (local)
     var historialAcciones by remember { mutableStateOf<List<AccionUsuario>>(emptyList()) }
+    DisposableEffect(Unit) {
+
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE)
+                as ConnectivityManager
+
+        val callback = object : ConnectivityManager.NetworkCallback() {
+
+            override fun onLost(network: Network) {
+                sinConexion = true
+                huboDesconexion = true
+            }
+
+            override fun onAvailable(network: Network) {
+                sinConexion = false
+
+                // 🔥 RECONEXIÓN REAL DE FIREBASE
+                FirebaseDatabase.getInstance().goOffline()
+                FirebaseDatabase.getInstance().goOnline()
+
+                huboDesconexion = false
+            }
+        }
+
+        cm.registerDefaultNetworkCallback(callback)
+        onDispose { cm.unregisterNetworkCallback(callback) }
+    }
 
     // Cargar configuraciones desde Firebase
     LaunchedEffect(Unit) {
-        dbRef.child("modo_noche").addListenerForSingleValueEvent(object : ValueEventListener {
+        val prefs = context.sessionDataStore.data.first()
+
+        modoNocheHabilitado = prefs[KEY_MODO_NOCHE] ?: false
+        desdeNoche = prefs[KEY_DESDE_NOCHE] ?: "22:00"
+        hastaNoche = prefs[KEY_HASTA_NOCHE] ?: "07:00"
+
+        humedadMin = prefs[KEY_HUM_MIN] ?: 30f
+        humedadMax = prefs[KEY_HUM_MAX] ?: 70f
+    }
+    LaunchedEffect(Unit) {
+        dbRef.addListenerForSingleValueEvent(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                modoNocheHabilitado = snapshot.child("habilitado").getValue(Boolean::class.java) ?: false
-                desdeNoche = snapshot.child("desde").getValue(String::class.java) ?: "22:00"
-                hastaNoche = snapshot.child("hasta").getValue(String::class.java) ?: "07:00"
+
+                modoNocheHabilitado =
+                    snapshot.child("modo_noche/habilitado")
+                        .getValue(String::class.java)
+                        ?.toBoolean() ?: modoNocheHabilitado
+
+                desdeNoche =
+                    snapshot.child("modo_noche/desde")
+                        .getValue(String::class.java) ?: desdeNoche
+
+                hastaNoche =
+                    snapshot.child("modo_noche/hasta")
+                        .getValue(String::class.java) ?: hastaNoche
+
+                humedadMin =
+                    snapshot.child("rango_humedad/min")
+                        .getValue(Int::class.java)
+                        ?.toFloat() ?: humedadMin
+
+                humedadMax =
+                    snapshot.child("rango_humedad/max")
+                        .getValue(Int::class.java)
+                        ?.toFloat() ?: humedadMax
+
+                // 🔥 sincroniza local
+                scope.launch {
+                    context.sessionDataStore.edit {
+                        it[KEY_MODO_NOCHE] = modoNocheHabilitado
+                        it[KEY_DESDE_NOCHE] = desdeNoche
+                        it[KEY_HASTA_NOCHE] = hastaNoche
+                        it[KEY_HUM_MIN] = humedadMin
+                        it[KEY_HUM_MAX] = humedadMax
+                    }
+                }
             }
+
             override fun onCancelled(error: DatabaseError) {}
         })
-
-        dbRef.child("rango_humedad").addListenerForSingleValueEvent(object : ValueEventListener {
-            override fun onDataChange(snapshot: DataSnapshot) {
-                humedadMin = snapshot.child("min").getValue(Int::class.java)?.toFloat() ?: 30f
-                humedadMax = snapshot.child("max").getValue(Int::class.java)?.toFloat() ?: 70f
-            }
-            override fun onCancelled(error: DatabaseError) {}
-        })
-
-        // Cargar historial local
-        val acciones = context.sessionDataStore.data.map { prefs ->
-            val json = prefs[stringPreferencesKey("historial_acciones")] ?: "[]"
-            parseHistorial(json)
-        }.first()
-        historialAcciones = acciones.sortedByDescending { it.timestamp }
     }
 
+
     fun actualizarModoNoche() {
-        dbRef.child("modo_noche").updateChildren(
+        dbRef.child("modo_noche").setValue(
             mapOf(
-                "habilitado" to modoNocheHabilitado,
+                "habilitado" to modoNocheHabilitado.toString(),
                 "desde" to desdeNoche,
                 "hasta" to hastaNoche
             )
         )
-        guardarAccion(context, scope, "Modo noche actualizado", "De $desdeNoche a $hastaNoche")
+
+        scope.launch {
+            context.sessionDataStore.edit {
+                it[KEY_MODO_NOCHE] = modoNocheHabilitado
+                it[KEY_DESDE_NOCHE] = desdeNoche
+                it[KEY_HASTA_NOCHE] = hastaNoche
+            }
+        }
     }
 
+
     fun actualizarRangoHumedad() {
-        dbRef.child("rango_humedad").updateChildren(
+        dbRef.child("rango_humedad").setValue(
             mapOf(
                 "min" to humedadMin.toInt(),
                 "max" to humedadMax.toInt()
             )
         )
-        guardarAccion(context, scope, "Rango de humedad actualizado", "${humedadMin.toInt()}% - ${humedadMax.toInt()}%")
+
+        scope.launch {
+            context.sessionDataStore.edit {
+                it[KEY_HUM_MIN] = humedadMin
+                it[KEY_HUM_MAX] = humedadMax
+            }
+        }
     }
+
 
     fun seleccionarHoraNoche(esDesde: Boolean) {
         if (!modoNocheHabilitado) return
