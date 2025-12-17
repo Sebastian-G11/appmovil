@@ -15,6 +15,8 @@ import androidx.navigation.compose.*
 import com.example.componentestest.Componentes.Firebase.PantallaLogin
 import com.example.firebase_testapp.loginLogic.SessionManager
 import com.example.firebase_testapp.loginLogic.registrarAdmin
+import com.example.firebase_testapp.screem.PantallaAjustes
+import com.example.firebase_testapp.screem.PantallaAlertas
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -78,6 +80,9 @@ fun AppPrincipal() {
                     }
                     composable("techo") { ModoTecho() }
                     composable("silencio") { ProgramacionHoraria() }
+
+                    composable("alertas") { PantallaAlertas() }
+                    composable("ajustes") { PantallaAjustes() }
                 }
             }
         }
