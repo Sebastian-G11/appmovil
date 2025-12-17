@@ -97,6 +97,15 @@ fun PantallaAjustes() {
         cm.registerDefaultNetworkCallback(callback)
         onDispose { cm.unregisterNetworkCallback(callback) }
     }
+    LaunchedEffect(Unit) {
+        context.sessionDataStore.data
+            .map { prefs ->
+                prefs[stringPreferencesKey("historial_acciones")] ?: "[]"
+            }
+            .collect { json ->
+                historialAcciones = parseHistorial(json)
+            }
+    }
 
     // Cargar configuraciones desde Firebase
     LaunchedEffect(Unit) {
