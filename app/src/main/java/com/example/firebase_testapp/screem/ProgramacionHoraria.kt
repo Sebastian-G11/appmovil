@@ -24,11 +24,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.*
 
-/* ======================================================
-   UTILIDAD RED (MISMA QUE OTRA PANTALLA)
-   ====================================================== */
-
-
 @Composable
 fun ProgramacionHoraria() {
 
@@ -47,13 +42,18 @@ fun ProgramacionHoraria() {
         FirebaseDatabase.getInstance().getReference("programacion_horaria")
     }
 
+    // Variables de programación horaria
     var desde by remember { mutableStateOf("--:--") }
     var hasta by remember { mutableStateOf("--:--") }
     var estado by remember { mutableStateOf("deshabilitado") }
 
+    // Estado del techo
+    var estadoTecho by remember { mutableStateOf("Cerrado") }
+
     val KEY_DESDE = stringPreferencesKey("prog_desde")
     val KEY_HASTA = stringPreferencesKey("prog_hasta")
     val KEY_ESTADO = stringPreferencesKey("prog_estado")
+    val KEY_ESTADO_TECHO = stringPreferencesKey("estado_techo")
 
     /* ======================================================
        LISTENER REAL DE RED
@@ -62,7 +62,6 @@ fun ProgramacionHoraria() {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
         val callback = object : ConnectivityManager.NetworkCallback() {
-
             override fun onLost(network: Network) {
                 sinConexion = true
                 huboDesconexion = true
@@ -74,7 +73,6 @@ fun ProgramacionHoraria() {
                 // 🔥 Reconexión REAL Firebase
                 FirebaseDatabase.getInstance().goOffline()
                 FirebaseDatabase.getInstance().goOnline()
-
                 refreshKey++
 
                 if (huboDesconexion) {
@@ -119,6 +117,7 @@ fun ProgramacionHoraria() {
                 desde = prefs[KEY_DESDE] ?: "--:--"
                 hasta = prefs[KEY_HASTA] ?: "--:--"
                 estado = prefs[KEY_ESTADO] ?: "deshabilitado"
+                estadoTecho = prefs[KEY_ESTADO_TECHO] ?: "Cerrado"
             }
 
             /* --------------------------------------------------
@@ -131,11 +130,22 @@ fun ProgramacionHoraria() {
                         hasta = snapshot.child("hasta").getValue(String::class.java) ?: hasta
                         estado = snapshot.child("estado").getValue(String::class.java) ?: estado
 
+                        // Sincroniza estado del techo con Firebase si es necesario
+                        FirebaseDatabase.getInstance().getReference("techo/estado")
+                            .addListenerForSingleValueEvent(object : ValueEventListener {
+                                override fun onDataChange(snap: DataSnapshot) {
+                                    val estadoFB = snap.getValue(String::class.java)
+                                    if (estadoFB != null) estadoTecho = estadoFB
+                                }
+                                override fun onCancelled(error: DatabaseError) {}
+                            })
+
                         scope.launch {
                             context.sessionDataStore.edit {
                                 it[KEY_DESDE] = desde
                                 it[KEY_HASTA] = hasta
                                 it[KEY_ESTADO] = estado
+                                it[KEY_ESTADO_TECHO] = estadoTecho
                             }
                         }
                     }
@@ -156,11 +166,16 @@ fun ProgramacionHoraria() {
                     )
                 )
 
+                // También actualiza estado del techo
+                FirebaseDatabase.getInstance().getReference("techo/estado")
+                    .setValue(estadoTecho)
+
                 scope.launch {
                     context.sessionDataStore.edit {
                         it[KEY_DESDE] = desde
                         it[KEY_HASTA] = hasta
                         it[KEY_ESTADO] = estado
+                        it[KEY_ESTADO_TECHO] = estadoTecho
                     }
                 }
             }
@@ -283,9 +298,6 @@ fun ProgramacionHoraria() {
     }
 }
 
-/* --------------------------------------------------
-   COMPONENTE REUTILIZABLE
-   -------------------------------------------------- */
 @Composable
 private fun ItemHora(
     titulo: String,
