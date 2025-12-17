@@ -20,7 +20,9 @@ fun BarraNavegacion(navController: NavHostController) {
     val items = listOf(
         BottomNavItem("Techo", "techo", R.drawable.casa),
         BottomNavItem("Clima", "clima", R.drawable.clima),
-        BottomNavItem("Programación", "silencio", R.drawable.reloj)
+        BottomNavItem("Programación", "silencio", R.drawable.reloj),
+        BottomNavItem("Alertas", "alertas", R.drawable.notification),
+        BottomNavItem("Ajustes", "ajustes", R.drawable.settings)
     )
 
     val config = LocalConfiguration.current
